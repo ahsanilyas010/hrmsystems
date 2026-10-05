@@ -1,8 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { formatDate, scoreColor, initials, cn } from '@/lib/utils'
-import { likeLiteral, orLikeValue, roleOptions } from '@/lib/filters'
-import RoleSearch from '@/components/RoleSearch'
+import { orLikeValue } from '@/lib/filters'
 import type { Candidate } from '@/lib/supabase/types'
 
 export const revalidate = 0
@@ -10,11 +9,10 @@ export const revalidate = 0
 export default async function CandidatesPage({
   searchParams,
 }: {
-  searchParams: { q?: string; stage?: string; role?: string }
+  searchParams: { q?: string; stage?: string }
 }) {
   const supabase = createClient()
   const q     = searchParams.q?.trim() || ''
-  const role  = searchParams.role?.trim() || ''
   const stage = searchParams.stage || ''
 
   let query = supabase
@@ -28,27 +26,21 @@ export default async function CandidatesPage({
       `first_name.ilike.${v},last_name.ilike.${v},email.ilike.${v},preferred_role.ilike.${v}`
     )
   }
-  if (role) {
-    // Partial match: "design" finds "Design Intern", "Paid Design Internship", …
-    query = query.ilike('preferred_role', `%${likeLiteral(role)}%`)
-  }
   if (stage) {
     query = query.eq('stage_id', stage)
   }
 
-  const [{ data: candidates }, { data: stages }, { data: roleRows }] = await Promise.all([
+  const [{ data: candidates }, { data: stages }] = await Promise.all([
     query,
     supabase.from('pipeline_stages').select('id,name').order('order_index'),
-    supabase.from('candidates').select('preferred_role').not('preferred_role', 'is', null),
   ])
-  const roles = roleOptions(roleRows)
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Candidates</h1>
         <span className="text-slate-500 text-sm">
-          {candidates?.length ?? 0} {q || role || stage ? 'matching' : 'total'}
+          {candidates?.length ?? 0} {q || stage ? 'matching' : 'total'}
         </span>
       </div>
 
@@ -57,18 +49,17 @@ export default async function CandidatesPage({
         <input
           name="q"
           defaultValue={q}
-          placeholder="Search name, email, role…"
+          placeholder="Search by name, email, or role"
           className="input max-w-xs"
         />
-        <RoleSearch value={role} roles={roles} />
         <select name="stage" defaultValue={stage} className="input max-w-[200px]">
           <option value="">All stages</option>
           {stages?.map(s => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
-        <button type="submit" className="btn-primary">Filter</button>
-        {(q || role || stage) && (
+        <button type="submit" className="btn-primary">Search</button>
+        {(q || stage) && (
           <Link href="/candidates" className="btn-ghost">Clear</Link>
         )}
       </form>
